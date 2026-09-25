@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vault — distributed object store simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0D1117; --panel:#131A22; --panel-2:#0F151C; --border:#232C37; --border-strong:#334051;
+  --text:#E6EDF3; --text-dim:#8B98A5; --text-faint:#5B6675;
+  --accent:#4FD1C5; --accent-dim:#1F5F5C; --accent-bg:#0F2926;
+  --amber:#F0A868; --amber-bg:#3A2A14; --red:#E5484D; --red-bg:#3A1418; --green:#7FD99A;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+:root:not([data-theme="light"]){ color-scheme: dark; }
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#F3F4F1; --panel:#FFFFFF; --panel-2:#EBEDE8; --border:#D8DBD4; --border-strong:#BFC4BA;
+    --text:#161B1F; --text-dim:#5A6470; --text-faint:#8A93A0;
+    --accent:#0F8C81; --accent-dim:#CDEDE9; --accent-bg:#E4F6F4;
+    --amber:#B06A12; --amber-bg:#FBEBD4; --red:#C22A2E; --red-bg:#FBE1E2; --green:#1E8A4C;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F3F4F1; --panel:#FFFFFF; --panel-2:#EBEDE8; --border:#D8DBD4; --border-strong:#BFC4BA;
+  --text:#161B1F; --text-dim:#5A6470; --text-faint:#8A93A0;
+  --accent:#0F8C81; --accent-dim:#CDEDE9; --accent-bg:#E4F6F4;
+  --amber:#B06A12; --amber-bg:#FBEBD4; --red:#C22A2E; --red-bg:#FBE1E2; --green:#1E8A4C;
+  color-scheme: light;
+}
+*{box-sizing:border-box;}
+html,body{
+  margin:0; background:var(--bg); color:var(--text);
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px);}
+body{ font-family:'IBM Plex Sans', sans-serif; font-size:14px; line-height:1.5; }
+.mono{ font-family:'IBM Plex Mono', monospace; }
+button, input, select, textarea{ font-family:inherit; font-size:13px; color:var(--text); }
+input, select, textarea{
+  background:var(--panel-2); border:1px solid var(--border); border-radius:6px;
+  padding:7px 9px; outline:none;
+}
+input:focus, select:focus, textarea:focus, button:focus-visible{
+  border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-dim);
+}
+button{
+  background:var(--panel-2); border:1px solid var(--border-strong); border-radius:6px;
+  padding:7px 12px; cursor:pointer; font-weight:500;
+}
+button:hover{ border-color:var(--accent); }
+button:active{ transform:scale(0.98); }
+button.primary{ background:var(--accent-bg); border-color:var(--accent); color:var(--accent); }
+button.danger{ background:var(--red-bg); border-color:var(--red); color:var(--red); }
+button.ghost{ background:transparent; border-color:transparent; padding:4px 8px; }
+button.small{ padding:4px 8px; font-size:12px; }
+label{ font-size:12px; color:var(--text-dim); display:block; margin-bottom:4px; }
+h1,h2,h3{ font-weight:500; margin:0; }
+a{ color:var(--accent); }
+
+.wrap{ max-width:1360px; margin:0 auto; padding:20px 20px 60px; }
+
+header.top{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:24px;
+  padding-bottom:18px; margin-bottom:18px; border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+}
+.brand{ display:flex; align-items:baseline; gap:10px; }
+.brand h1{ font-size:22px; letter-spacing:0.2px; }
+.brand .tag{ color:var(--text-dim); font-size:13px; max-width:520px; }
+.hero-line{ color:var(--text-dim); font-size:13px; margin-top:6px; max-width:640px; }
+
+.cfg-bar{ display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.cfg-field{ display:flex; flex-direction:column; }
+.cfg-field input{ width:56px; text-align:center; }
+.cfg-note{ font-size:11px; margin-top:4px; padding:2px 6px; border-radius:4px; display:inline-block; width:fit-content; }
+.cfg-note.strong{ background:var(--accent-bg); color:var(--accent); }
+.cfg-note.weak{ background:var(--amber-bg); color:var(--amber); }
+.toggle-row{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); }
+
+.grid{ display:grid; grid-template-columns: 1.35fr 1fr; gap:16px; }
+@media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
+
+.panel{
+  background:var(--panel); border:1px solid var(--border); border-radius:10px;
+  padding:16px; margin-bottom:16px;
+}
+.panel h2{ font-size:14px; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between; }
+.panel h2 .sub{ font-size:11px; color:var(--text-faint); font-weight:400; }
+
+.legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--text-dim); margin-bottom:10px; }
+.legend span{ display:inline-flex; align-items:center; gap:5px; }
+.dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+
+#topo-svg{ width:100%; height:auto; display:block; }
+.node-tip{ font-size:10.5px; }
+
+.scenario-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+
+.inspector{ border-top:1px dashed var(--border); margin-top:12px; padding-top:12px; }
+.inspector-empty{ color:var(--text-faint); font-size:12px; }
+.insp-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;}
+.insp-actions{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.insp-keys{ display:flex; flex-direction:column; gap:4px; max-height:160px; overflow:auto; }
+.insp-key-row{ display:flex; align-items:center; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:1px solid var(--border); }
+.pill{ font-size:10.5px; padding:1px 7px; border-radius:999px; font-weight:500; }
+.pill.ok{ background:var(--accent-bg); color:var(--accent); }
+.pill.stale{ background:var(--amber-bg); color:var(--amber); }
+.pill.corrupt{ background:var(--red-bg); color:var(--red); }
+.pill.missing{ background:var(--panel-2); color:var(--text-faint); border:1px solid var(--border); }
+
+.form-row{ display:flex; gap:10px; margin-bottom:10px; }
+.form-row > div{ flex:1; }
+textarea{ width:100%; min-height:56px; resize:vertical; }
+.result-box{
+  margin-top:10px; padding:10px; border-radius:6px; background:var(--panel-2);
+  border:1px solid var(--border); font-size:12.5px;
+}
+.result-box.ok{ border-color:var(--accent-dim); }
+.result-box.err{ border-color:var(--red); }
+
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+th{ text-align:left; color:var(--text-faint); font-weight:500; font-size:11px; padding:5px 6px; border-bottom:1px solid var(--border); }
+td{ padding:6px; border-bottom:1px solid var(--border); vertical-align:middle; }
+tr:last-child td{ border-bottom:none; }
+.repl-dots{ display:inline-flex; gap:3px; }
+.repl-dots .dot{ width:8px; height:8px; }
+
+.metrics{ display:grid; grid-template-columns:repeat(auto-fit, minmax(120px,1fr)); gap:10px; margin-bottom:16px; }
+.metric{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+.metric .num{ font-size:20px; font-weight:600; font-family:'IBM Plex Mono', monospace; }
+.metric .lbl{ font-size:11px; color:var(--text-dim); margin-top:2px; }
+
+#log{ height:230px; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:2px; font-size:11.5px; }
+.log-line{ padding:3px 6px; border-radius:4px; display:flex; gap:8px; }
+.log-line .t{ color:var(--text-faint); flex-shrink:0; }
+.log-line.info{ color:var(--text-dim); }
+.log-line.success{ color:var(--accent); }
+.log-line.warn{ color:var(--amber); }
+.log-line.error{ color:var(--red); }
+.log-line.critical{ background:var(--red-bg); color:var(--red); font-weight:500; }
+
+.two-col{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; }
+@media (max-width:980px){ .two-col{ grid-template-columns:1fr; } }
+
+.node-actions{ display:flex; flex-wrap:wrap; gap:6px; }
+.sr-only{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; }
+footer.note{ color:var(--text-faint); font-size:11.5px; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div>
+    <div class="brand"><h1>Vault</h1><span class="tag mono">object store simulator</span></div>
+    <p class="hero-line" id="heroLine">Six independent disks replicate, verify, and repair your data while you break things. Everything below runs live in your browser — kill a node, corrupt a replica, split the network, and watch the repair loop put it back together.</p>
+  </div>
+  <div class="cfg-bar" id="cfgBar"></div>
+</header>
+
+<div class="metrics" id="metrics"></div>
+
+<div class="grid">
+  <div>
+    <div class="panel">
+      <h2>Cluster topology <span class="sub" id="topoSub"></span></h2>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--accent)"></span>online / healthy</span>
+        <span><span class="dot" style="background:var(--amber)"></span>partitioned</span>
+        <span><span class="dot" style="background:var(--red)"></span>failed</span>
+        <span><span class="dot" style="background:var(--text-faint)"></span>no data for focused object</span>
+      </div>
+      <svg id="topo-svg" viewBox="0 0 640 460" role="img" aria-label="Cluster topology diagram">
+        <title>Cluster topology</title>
+      </svg>
+      <div class="scenario-row" id="chaosBar"></div>
+      <div class="inspector" id="inspector"><p class="inspector-empty">Click a node above to inspect it.</p></div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Write an object</h2>
+      <div class="form-row">
+        <div>
+          <label for="putKey">Key</label>
+          <input type="text" id="putKey" class="mono" placeholder="e.g. invoices/2026-04.pdf">
+        </div>
+        <div style="flex:0 0 70px;">
+          <label for="putRf">Replicas</label>
+          <input type="number" id="putRf" min="1" max="8" placeholder="default">
+        </div>
+      </div>
+      <label for="putData">Data</label>
+      <textarea id="putData" class="mono" placeholder="Paste or type the object's content"></textarea>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="primary" id="btnWrite">Write object</button>
+        <button class="ghost" id="btnRandomKey">Suggest key</button>
+      </div>
+      <div id="writeResult"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Read an object</h2>
+      <div class="form-row">
+        <div>
+          <label for="getKey">Key</label>
+          <input type="text" id="getKey" class="mono" placeholder="key to read">
+        </div>
+        <div style="flex:0 0 70px;">
+          <label for="getR">Quorum</label>
+          <input type="number" id="getR" min="1" max="8" placeholder="default">
+        </div>
+      </div>
+      <button class="primary" id="btnRead">Read object</button>
+      <div id="readResult"></div>
+    </div>
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="panel">
+    <h2>Object metadata <span class="sub" id="objSub"></span></h2>
+    <div style="max-height:280px; overflow:auto;">
+      <table>
+        <thead><tr><th>Key</th><th>Ver</th><th>Status</th><th>Replicas</th><th></th></tr></thead>
+        <tbody id="objTable"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Event log</h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<footer class="note">Simulation only — state lives in this tab's memory and resets on reload. Replication placement uses rendezvous hashing; repair, integrity checks and rebalancing run on a background timer.</footer>
+</div>
+
+<script>
+(function(){
+
+function hashStr(s){
+  var h = 5381;
+  for (var i=0;i<s.length;i++){ h = ((h*33) ^ s.charCodeAt(i)) >>> 0; }
+  return h >>> 0;
+}
+function hex(n){ return n.toString(16).padStart(8,'0'); }
+function score(nodeId, key){ return hashStr(nodeId + '::' + key); }
+function nowStr(){
+  var d = new Date();
+  return d.toTimeString().slice(0,8);
+}
+function fmtBytes(n){
+  if(n < 1024) return n + ' B';
+  return (n/1024).toFixed(1) + ' KB';
+}
+function clone(e){ return { data:e.data, checksum:e.checksum, version:e.version }; }
+
+var S = null;
+
+function initState(){
+  S = {
+    nodeSeq: 1,
+    nodes: [],
+    objects: {},
+    config: { rf:3, w:2, r:2, autoRepair:true, chaos:false },
+    split: { active:false, groupB:{} },
+    log: [],
+    repairsPerformed: 0,
+    focusedKey: null,
+    inspectedNode: null,
+    tick: 0,
+    timers: {}
+  };
+  for (var i=0;i<6;i++) addNode(false);
+  seedDemoData();
+  addLog('info', 'Cluster initialized with 6 nodes. RF=' + S.config.rf + ', W=' + S.config.w + ', R=' + S.config.r + '.');
+  startTimers();
+}
+
+function addNode(logIt){
+  var id = 'n' + S.nodeSeq++;
+  S.nodes.push({ id:id, status:'online', partitioned:false, store:{} });
+  if (logIt) addLog('info', 'Node ' + id + ' joined the cluster.');
+  return id;
+}
+
+function nodeById(id){
+  for (var i=0;i<S.nodes.length;i++) if (S.nodes[i].id === id) return S.nodes[i];
+  return null;
+}
+
+function reachable(n){
+  if (!n) return false;
+  if (n.status !== 'online') return false;
+  if (n.partitioned) return false;
+  if (S.split.active && S.split.groupB[n.id]) return false;
+  return true;
+}
+
+function pickPlacement(key, count, excludeIds){
+  excludeIds = excludeIds || [];
+  var candidates = S.nodes.filter(function(n){ return reachable(n) && excludeIds.indexOf(n.id) === -1; });
+  candidates.sort(function(a,b){ return score(b.id,key) - score(a.id,key); });
+  return candidates.slice(0, count).map(function(n){ return n.id; });
+}
+
+function addLog(level, msg){
+  S.log.unshift({ t: nowStr(), level: level, msg: msg });
+  if (S.log.length > 200) S.log.pop();
+  renderLog();
+}
+
+// ---------- core operations ----------
+
+function putObject(key, data, rfOverride){
+  var rf = rfOverride || S.config.rf;
+  var reach = S.nodes.filter(reachable);
+  if (reach.length < S.config.w){
+    addLog('error', 'Write failed for "' + key + '": only ' + reach.length + ' reachable node(s), need write quorum W=' + S.config.w + '.');
+    return { ok:false, msg:'Not enough reachable nodes for write quorum.' };
+  }
+  var effectiveRf = Math.min(rf, reach.length);
+  var placement = pickPlacement(key, effectiveRf, []);
+  var version = (S.objects[key] ? S.objects[key].version : 0) + 1;
+  var checksum = hex(hashStr(data));
+  var acks = 0;
+  placement.forEach(function(id){
+    nodeById(id).store[key] = { data:data, checksum:checksum, version:version };
+    acks++;
+  });
+  if (acks >= S.config.w){
+    S.objects[key] = {
+      rf: rf, version: version, size: data.length,
+      replicaNodes: placement.slice(), deleted:false, lostLogged:false
+    };
+    var degraded = effectiveRf < rf ? ' (degraded: only ' + effectiveRf + '/' + rf + ' replicas placed)' : '';
+    addLog('success', 'Wrote "' + key + '" v' + version + ' to [' + placement.join(', ') + '] — ' + acks + '/' + S.config.w + ' acks' + degraded + '.');
+    S.focusedKey = key;
+    return { ok:true, version:version, placement:placement };
+  } else {
+    placement.forEach(function(id){ delete nodeById(id).store[key]; });
+    addLog('error', 'Write failed for "' + key + '": only ' + acks + ' ack(s), need W=' + S.config.w + '.');
+    return { ok:false, msg:'Write quorum not reached.' };
+  }
+}
+
+function readObject(key, rOverride){
+  var r = rOverride || S.config.r;
+  var meta = S.objects[key];
+  if (!meta || meta.deleted){
+    addLog('error', 'Read failed for "' + key + '": object not found.');
+    return { ok:false, msg:'Object not found.' };
+  }
+  var replicaIds = meta.replicaNodes.filter(function(id){ return nodeById(id); });
+  var reachCandidates = replicaIds.filter(function(id){ return reachable(nodeById(id)); });
+  if (reachCandidates.length < Math.min(r, replicaIds.length || r)){
+    addLog('error', 'Read failed for "' + key + '": only ' + reachCandidates.length + ' reachable replica(s), need read quorum R=' + r + '.');
+    return { ok:false, msg:'Read quorum not reached — not enough reachable replicas.' };
+  }
+  var sample = reachCandidates.slice(0, Math.max(r, 1));
+  var responses = sample.map(function(id){
+    var n = nodeById(id);
+    var e = n.store[key];
+    var healthy = e && hex(hashStr(e.data)) === e.checksum && e.version === meta.version;
+    return { node:id, entry:e, healthy:healthy };
+  });
+  var valid = responses.filter(function(r){ return r.healthy; });
+  S.focusedKey = key;
+  if (valid.length === 0){
+    addLog('error', 'Read failed for "' + key + '": all ' + sample.length + ' sampled replica(s) are corrupt or stale.');
+    return { ok:false, msg:'All sampled replicas are corrupt or stale.' };
+  }
+  var good = valid[0];
+  var repaired = [];
+  responses.forEach(function(r){
+    if (!r.healthy && reachable(nodeById(r.node))){
+      nodeById(r.node).store[key] = clone(good.entry);
+      repaired.push(r.node);
+    }
+  });
+  if (repaired.length){
+    addLog('warn', 'Read repair on "' + key + '": fixed stale/corrupt replica(s) on [' + repaired.join(', ') + '] during read.');
+    S.repairsPerformed += repaired.length;
+  }
+  addLog('success', 'Read "' + key + '" v' + meta.version + ' — served from ' + sample.length + ' replica(s), ' + valid.length + ' healthy.');
+  return { ok:true, data:good.entry.data, version:meta.version, servedBy: sample.map(function(r){return r.node;}), healthyCount: valid.length, sampleSize: sample.length };
+}
+
+function deleteObject(key){
+  var meta = S.objects[key];
+  if (!meta) return;
+  meta.replicaNodes.forEach(function(id){
+    var n = nodeById(id);
+    if (n) delete n.store[key];
+  });
+  delete S.objects[key];
+  if (S.focusedKey === key) S.focusedKey = null;
+  addLog('info', 'Deleted "' + key + '" and removed all replicas.');
+}
+
+function replicaHealth(key, meta, id){
+  var n = nodeById(id);
+  if (!n) return 'missing';
+  if (n.status === 'failed') return 'missing';
+  if (!reachable(n)) return 'unreachable';
+  var e = n.store[key];
+  if (!e) return 'missing';
+  if (hex(hashStr(e.data)) !== e.checksum) return 'corrupt';
+  if (e.version !== meta.version) return 'stale';
+  return 'ok';
+}
+
+function objectStatus(key){
+  var meta = S.objects[key];
+  if (!meta) return { label:'unknown', healthy:0 };
+  var healthy = meta.replicaNodes.filter(function(id){ return replicaHealth(key, meta, id) === 'ok'; }).length;
+  var label = 'healthy';
+  if (healthy === 0) label = meta.replicaNodes.length === 0 ? 'lost' : 'unavailable';
+  else if (healthy < meta.rf) label = 'degraded';
+  return { label:label, healthy:healthy };
+}
+
+// ---------- background repair / rebalance ----------
+
+function repairTick(){
+  S.tick++;
+  if (!S.config.autoRepair) { renderAll(); return; }
+  Object.keys(S.objects).forEach(function(key){
+    var meta = S.objects[key];
+    if (meta.deleted) return;
+    meta.replicaNodes = meta.replicaNodes.filter(function(id){
+      var n = nodeById(id);
+      return n && n.status !== 'failed';
+    });
+    var healthy = meta.replicaNodes.filter(function(id){ return replicaHealth(key, meta, id) === 'ok'; });
+    if (healthy.length === 0){
+      if (meta.replicaNodes.length === 0){
+        if (!meta.lostLogged){ addLog('critical', 'Data loss: "' + key + '" has no surviving replicas anywhere.'); meta.lostLogged = true; }
+      }
+      return;
+    }
+    meta.lostLogged = false;
+    var sourceId = healthy[0];
+    var sourceEntry = nodeById(sourceId).store[key];
+    meta.replicaNodes.forEach(function(id){
+      if (id === sourceId) return;
+      var n = nodeById(id);
+      if (!reachable(n)) return;
+      var e = n.store[key];
+      var bad = !e || hex(hashStr(e.data)) !== e.checksum || e.version !== meta.version;
+      if (bad){
+        var wasCorrupt = e && hex(hashStr(e.data)) !== e.checksum;
+        n.store[key] = clone(sourceEntry);
+        S.repairsPerformed++;
+        addLog(wasCorrupt ? 'warn' : 'info', (wasCorrupt ? 'Self-heal' : 'Sync') + ': fixed ' + (wasCorrupt ? 'corrupted' : 'stale') + ' replica of "' + key + '" on ' + id + '.');
+      }
+    });
+    if (healthy.length < meta.rf){
+      var target = pickPlacement(key, 1, meta.replicaNodes)[0];
+      if (target){
+        nodeById(target).store[key] = clone(sourceEntry);
+        meta.replicaNodes.push(target);
+        S.repairsPerformed++;
+        addLog('success', 'Repaired "' + key + '": added replica on ' + target + ' (' + (healthy.length+1) + '/' + meta.rf + ').');
+      }
+    }
+  });
+
+  if (S.tick % 6 === 0) rebalancePass();
+  renderAll();
+}
+
+function rebalancePass(){
+  var onlineReach = S.nodes.filter(reachable);
+  if (onlineReach.length < 2) return;
+  var loads = onlineReach.map(function(n){ return { id:n.id, load:Object.keys(n.store).length }; });
+  loads.sort(function(a,b){ return b.load - a.load; });
+  var maxN = loads[0], minN = loads[loads.length-1];
+  if (!maxN || !minN || maxN.id === minN.id) return;
+  if (maxN.load - minN.load < 2) return;
+  var maxNode = nodeById(maxN.id), minNode = nodeById(minN.id);
+  var keys = Object.keys(maxNode.store);
+  for (var i=0;i<keys.length;i++){
+    var key = keys[i];
+    var meta = S.objects[key];
+    if (!meta || meta.replicaNodes.indexOf(minN.id) !== -1) continue;
+    if (meta.replicaNodes.indexOf(maxN.id) === -1) continue;
+    minNode.store[key] = clone(maxNode.store[key]);
+    delete maxNode.store[key];
+    meta.replicaNodes = meta.replicaNodes.map(function(id){ return id === maxN.id ? minN.id : id; });
+    addLog('info', 'Rebalance: moved replica of "' + key + '" from ' + maxN.id + ' to ' + minN.id + ' to even out load.');
+    break;
+  }
+}
+
+function chaosTick(){
+  if (!S.config.chaos) return;
+  var online = S.nodes.filter(function(n){ return n.status === 'online' && !n.partitioned; });
+  var partitioned = S.nodes.filter(function(n){ return n.status === 'online' && n.partitioned; });
+  var failed = S.nodes.filter(function(n){ return n.status === 'failed'; });
+  var roll = Math.random();
+  if (roll < 0.35 && online.length > 2){
+    var n = online[Math.floor(Math.random()*online.length)];
+    if (Math.random() < 0.5){ n.partitioned = true; addLog('warn', 'Chaos: network partition isolated ' + n.id + '.'); }
+    else { failNode(n.id, true); }
+  } else if (roll < 0.55 && partitioned.length){
+    var p = partitioned[Math.floor(Math.random()*partitioned.length)];
+    p.partitioned = false; addLog('info', 'Chaos: partition healed for ' + p.id + '.');
+  } else if (roll < 0.7 && failed.length){
+    var f = failed[Math.floor(Math.random()*failed.length)];
+    replaceNode(f.id, true);
+  } else if (roll < 0.85 && online.length){
+    var c = online[Math.floor(Math.random()*online.length)];
+    corruptRandomKey(c.id, true);
+  }
+  renderAll();
+}
+
+function startTimers(){
+  clearTimers();
+  S.timers.repair = setInterval(repairTick, 2200);
+  S.timers.chaos = setInterval(chaosTick, 3600);
+}
+function clearTimers(){
+  if (S.timers.repair) clearInterval(S.timers.repair);
+  if (S.timers.chaos) clearInterval(S.timers.chaos);
+}
+
+// ---------- node actions ----------
+
+function failNode(id, silent){
+  var n = nodeById(id);
+  if (!n || n.status === 'failed') return;
+  n.status = 'failed';
+  n.partitioned = false;
+  n.store = {};
+  if (!silent) addLog('warn', 'Disk failure on ' + id + ' — all local data lost, repair will re-replicate elsewhere.');
+  else addLog('warn', 'Chaos: disk failure on ' + id + ' — data lost, will be re-replicated.');
+}
+function replaceNode(id, silent){
+  var n = nodeById(id);
+  if (!n) return;
+  n.status = 'online';
+  n.partitioned = false;
+  n.store = {};
+  if (!silent) addLog('info', 'Replaced ' + id + ' with a fresh empty disk.');
+  else addLog('info', 'Chaos: ' + id + ' replaced with a fresh empty disk.');
+}
+function togglePartition(id){
+  var n = nodeById(id);
+  if (!n || n.status !== 'online') return;
+  n.partitioned = !n.partitioned;
+  addLog(n.partitioned ? 'warn' : 'info', n.partitioned ? ('Network partition isolated ' + id + '.') : ('Partition healed for ' + id + '.'));
+}
+function corruptRandomKey(id, silent){
+  var n = nodeById(id);
+  if (!n) return;
+  var keys = Object.keys(n.store);
+  if (!keys.length){ if(!silent) addLog('info', id + ' holds no objects to corrupt.'); return; }
+  var key = keys[Math.floor(Math.random()*keys.length)];
+  var e = n.store[key];
+  e.data = e.data + String.fromCharCode(33 + Math.floor(Math.random()*10));
+  if (!silent) addLog('warn', 'Injected silent corruption into "' + key + '" on ' + id + ' (checksum will now mismatch).');
+  else addLog('warn', 'Chaos: corrupted "' + key + '" on ' + id + '.');
+}
+function removeNode(){
+  if (S.nodes.length <= 3){ addLog('error', 'Refusing to shrink below 3 nodes.'); return; }
+  var n = S.nodes.pop();
+  Object.keys(S.objects).forEach(function(key){
+    var meta = S.objects[key];
+    var idx = meta.replicaNodes.indexOf(n.id);
+    if (idx !== -1) meta.replicaNodes.splice(idx,1);
+  });
+  if (S.inspectedNode === n.id) S.inspectedNode = null;
+  addLog('warn', 'Node ' + n.id + ' decommissioned and removed from the cluster.');
+}
+
+function seedDemoData(){
+  putObject('readme.txt', 'Vault demo cluster — write, read, and break things freely.');
+  putObject('config.yaml', 'replication: 3\nquorum:\n  write: 2\n  read: 2\n');
+  putObject('invoices/2026-03.csv', 'id,amount,status\n1,204.50,paid\n2,88.00,paid\n');
+  S.log = [];
+}
+
+// ---------- rendering ----------
+
+function statusColor(h){
+  if (h === 'ok') return 'var(--accent)';
+  if (h === 'stale') return 'var(--amber)';
+  if (h === 'corrupt') return 'var(--red)';
+  return 'var(--text-faint)';
+}
+
+function renderCfgBar(){
+  var el = document.getElementById('cfgBar');
+  var w = S.config.w, r = S.config.r, rf = S.config.rf;
+  var strong = (w + r) > rf;
+  el.innerHTML =
+    '<div class="cfg-field"><label for="rfIn">Default RF</label><input type="number" id="rfIn" min="1" max="8" value="'+rf+'"></div>' +
+    '<div class="cfg-field"><label for="wIn">Write W</label><input type="number" id="wIn" min="1" max="8" value="'+w+'"></div>' +
+    '<div class="cfg-field"><label for="rIn">Read R</label><input type="number" id="rIn" min="1" max="8" value="'+r+'">' +
+      '<span class="cfg-note '+(strong?'strong':'weak')+'">'+(strong ? 'W+R > RF — strong consistency' : 'W+R \u2264 RF — eventual consistency')+'</span></div>' +
+    '<div class="cfg-field"><label>&nbsp;</label><div class="toggle-row"><input type="checkbox" id="autoRepairChk" '+(S.config.autoRepair?'checked':'')+'> auto-repair</div>' +
+      '<div class="toggle-row" style="margin-top:4px;"><input type="checkbox" id="chaosChk" '+(S.config.chaos?'checked':'')+'> chaos monkey</div></div>' +
+    '<div class="cfg-field"><label>&nbsp;</label><button id="btnAddNode" class="small">Add node</button></div>' +
+    '<div class="cfg-field"><label>&nbsp;</label><button id="btnRemoveNode" class="small">Remove node</button></div>';
+
+  document.getElementById('rfIn').onchange = function(e){ S.config.rf = Math.max(1, parseInt(e.target.value)||1); renderAll(); };
+  document.getElementById('wIn').onchange = function(e){ S.config.w = Math.max(1, parseInt(e.target.value)||1); renderAll(); };
+  document.getElementById('rIn').onchange = function(e){ S.config.r = Math.max(1, parseInt(e.target.value)||1); renderAll(); };
+  document.getElementById('autoRepairChk').onchange = function(e){ S.config.autoRepair = e.target.checked; addLog('info', 'Auto-repair ' + (e.target.checked?'enabled':'paused') + '.'); };
+  document.getElementById('chaosChk').onchange = function(e){ S.config.chaos = e.target.checked; addLog('info', 'Chaos monkey ' + (e.target.checked?'started':'stopped') + '.'); };
+  document.getElementById('btnAddNode').onclick = function(){ addNode(true); renderAll(); };
+  document.getElementById('btnRemoveNode').onclick = function(){ removeNode(); renderAll(); };
+}
+
+function renderChaosBar(){
+  var el = document.getElementById('chaosBar');
+  el.innerHTML =
+    '<button class="small" id="scKill">Kill 2 random nodes</button>' +
+    '<button class="small" id="scCorrupt">Corrupt 3 replicas</button>' +
+    '<button class="small" id="scScale">Scale out (+3 nodes)</button>' +
+    '<button class="small" id="scSplit">'+(S.split.active ? 'Heal network split' : 'Split network')+'</button>' +
+    '<button class="small danger" id="scReset">Reset demo</button>';
+  document.getElementById('scKill').onclick = function(){
+    var online = S.nodes.filter(function(n){ return n.status==='online'; });
+    for (var i=0;i<2 && online.length;i++){
+      var n = online.splice(Math.floor(Math.random()*online.length),1)[0];
+      failNode(n.id);
+    }
+    renderAll();
+  };
+  document.getElementById('scCorrupt').onclick = function(){
+    var online = S.nodes.filter(function(n){ return n.status==='online' && Object.keys(n.store).length; });
+    for (var i=0;i<3 && online.length;i++){
+      var n = online[Math.floor(Math.random()*online.length)];
+      corruptRandomKey(n.id);
+    }
+    renderAll();
+  };
+  document.getElementById('scScale').onclick = function(){
+    for (var i=0;i<3;i++) addNode(true);
+    renderAll();
+  };
+  document.getElementById('scSplit').onclick = function(){
+    if (S.split.active){
+      S.split.active = false; S.split.groupB = {};
+      addLog('info', 'Network split healed — full connectivity restored.');
+    } else {
+      var online = S.nodes.filter(function(n){ return n.status==='online' && !n.partitioned; });
+      var half = online.slice(0, Math.floor(online.length/2));
+      var groupB = {};
+      half.forEach(function(n){ groupB[n.id] = true; });
+      S.split.active = true; S.split.groupB = groupB;
+      addLog('warn', 'Network split: [' + half.map(function(n){return n.id;}).join(', ') + '] cut off from the rest of the cluster.');
+    }
+    renderAll();
+  };
+  document.getElementById('scReset').onclick = function(){
+    clearTimers();
+    initState();
+    renderAll();
+  };
+}
+
+function renderMetrics(){
+  var el = document.getElementById('metrics');
+  var totalNodes = S.nodes.length;
+  var onlineNodes = S.nodes.filter(function(n){ return n.status==='online'; }).length;
+  var keys = Object.keys(S.objects);
+  var healthy=0, degraded=0, lost=0;
+  keys.forEach(function(k){
+    var s = objectStatus(k).label;
+    if (s==='healthy') healthy++; else if (s==='degraded' || s==='unavailable') degraded++; else if (s==='lost') lost++;
+  });
+  var storedBytes = 0;
+  S.nodes.forEach(function(n){ Object.keys(n.store).forEach(function(k){ storedBytes += n.store[k].data.length; }); });
+  var logicalBytes = 0;
+  keys.forEach(function(k){ logicalBytes += S.objects[k].size * S.objects[k].rf; });
+  var overhead = logicalBytes ? Math.round((storedBytes/logicalBytes)*100) : 100;
+
+  var cards = [
+    ['Nodes', onlineNodes + ' / ' + totalNodes],
+    ['Objects', keys.length],
+    ['Healthy', healthy],
+    ['Degraded', degraded],
+    ['Lost', lost],
+    ['Repairs run', S.repairsPerformed],
+    ['Stored', fmtBytes(storedBytes)],
+    ['Storage vs logical', overhead + '%']
+  ];
+  el.innerHTML = cards.map(function(c){
+    return '<div class="metric"><div class="num mono">'+c[1]+'</div><div class="lbl">'+c[0]+'</div></div>';
+  }).join('');
+}
+
+function nodePositions(){
+  var n = S.nodes.length;
+  var cx=320, cy=210, rad = Math.min(170, 120 + n*3);
+  var pos = {};
+  S.nodes.forEach(function(node, i){
+    var angle = (i/n) * Math.PI*2 - Math.PI/2;
+    pos[node.id] = { x: cx + rad*Math.cos(angle), y: cy + rad*Math.sin(angle) };
+  });
+  return pos;
+}
+
+function renderTopology(){
+  var svg = document.getElementById('topo-svg');
+  var pos = nodePositions();
+  var parts = [];
+
+  var meta = S.focusedKey ? S.objects[S.focusedKey] : null;
+  if (meta){
+    var ids = meta.replicaNodes.filter(function(id){ return pos[id]; });
+    for (var i=0;i<ids.length;i++){
+      for (var j=i+1;j<ids.length;j++){
+        var a = pos[ids[i]], b = pos[ids[j]];
+        parts.push('<line x1="'+a.x+'" y1="'+a.y+'" x2="'+b.x+'" y2="'+b.y+'" stroke="var(--border-strong)" stroke-width="1" stroke-dasharray="3,3"/>');
+      }
+    }
+  }
+
+  S.nodes.forEach(function(n){
+    var p = pos[n.id];
+    var fill, stroke, dash='';
+    if (n.status === 'failed'){ fill='var(--red-bg)'; stroke='var(--red)'; }
+    else if (n.partitioned || (S.split.active && S.split.groupB[n.id])){ fill='var(--amber-bg)'; stroke='var(--amber)'; dash='stroke-dasharray="4,3"'; }
+    else { fill='var(--accent-bg)'; stroke='var(--accent)'; }
+
+    var ringColor = null;
+    if (meta && meta.replicaNodes.indexOf(n.id) !== -1){
+      var h = replicaHealth(S.focusedKey, meta, n.id);
+      ringColor = statusColor(h);
+    }
+    var count = Object.keys(n.store).length;
+
+    parts.push('<g class="node-g" data-id="'+n.id+'" style="cursor:pointer;">');
+    if (ringColor){
+      parts.push('<circle cx="'+p.x+'" cy="'+p.y+'" r="27" fill="none" stroke="'+ringColor+'" stroke-width="3"/>');
+    }
+    parts.push('<circle cx="'+p.x+'" cy="'+p.y+'" r="22" fill="'+fill+'" stroke="'+stroke+'" stroke-width="1.5" '+dash+'/>');
+    parts.push('<text x="'+p.x+'" y="'+(p.y-1)+'" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="500" fill="var(--text)">'+n.id+'</text>');
+    parts.push('<text x="'+p.x+'" y="'+(p.y+11)+'" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="var(--text-dim)">'+count+' obj</text>');
+    parts.push('</g>');
+  });
+
+  svg.innerHTML = parts.join('');
+  svg.querySelectorAll('.node-g').forEach(function(g){
+    g.addEventListener('click', function(){
+      S.inspectedNode = g.getAttribute('data-id');
+      renderInspector();
+    });
+  });
+
+  var sub = document.getElementById('topoSub');
+  sub.textContent = S.focusedKey ? ('showing replicas of "' + S.focusedKey + '"') : '';
+}
+
+function renderInspector(){
+  var el = document.getElementById('inspector');
+  var id = S.inspectedNode;
+  if (!id || !nodeById(id)){
+    el.innerHTML = '<p class="inspector-empty">Click a node above to inspect it.</p>';
+    return;
+  }
+  var n = nodeById(id);
+  var statusLabel = n.status === 'failed' ? 'failed (disk lost)' : (n.partitioned || (S.split.active && S.split.groupB[id]) ? 'partitioned (unreachable)' : 'online');
+  var keys = Object.keys(n.store);
+  var rows = keys.map(function(k){
+    var meta = S.objects[k];
+    var h = meta ? replicaHealth(k, meta, id) : 'ok';
+    return '<div class="insp-key-row"><span class="mono">'+k+'</span><span class="pill '+h+'">'+h+'</span></div>';
+  }).join('') || '<p class="inspector-empty">No objects stored here.</p>';
+
+  el.innerHTML =
+    '<div class="insp-head"><strong class="mono">'+id+'</strong><span class="pill '+(n.status==='failed'?'corrupt':(n.partitioned?'stale':'ok'))+'">'+statusLabel+'</span></div>' +
+    '<div class="insp-actions">' +
+      '<button class="small" id="actPart">'+(n.partitioned ? 'Heal partition' : 'Partition') +'</button>' +
+      '<button class="small danger" id="actFail">'+(n.status==='failed' ? 'Replace disk' : 'Fail disk')+'</button>' +
+      '<button class="small" id="actCorrupt" '+(n.status==='failed'?'disabled':'')+'>Corrupt random object</button>' +
+    '</div>' +
+    '<div class="insp-keys">'+rows+'</div>';
+
+  document.getElementById('actPart').onclick = function(){ togglePartition(id); renderAll(); };
+  document.getElementById('actFail').onclick = function(){
+    if (n.status==='failed') replaceNode(id); else failNode(id);
+    renderAll();
+  };
+  document.getElementById('actCorrupt').onclick = function(){ corruptRandomKey(id); renderAll(); };
+}
+
+function renderObjTable(){
+  var tbody = document.getElementById('objTable');
+  var keys = Object.keys(S.objects);
+  document.getElementById('objSub').textContent = keys.length + ' object(s)';
+  if (!keys.length){
+    tbody.innerHTML = '<tr><td colspan="5" class="inspector-empty">No objects yet — write one above.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = keys.map(function(key){
+    var meta = S.objects[key];
+    var st = objectStatus(key);
+    var dots = meta.replicaNodes.map(function(id){
+      var h = replicaHealth(key, meta, id);
+      return '<span class="dot" title="'+id+': '+h+'" style="background:'+statusColor(h)+'"></span>';
+    }).join('');
+    var pillClass = st.label==='healthy' ? 'ok' : (st.label==='degraded' ? 'stale' : (st.label==='lost' ? 'corrupt' : 'missing'));
+    return '<tr>' +
+      '<td class="mono">'+key+'</td>' +
+      '<td class="mono">v'+meta.version+'</td>' +
+      '<td><span class="pill '+pillClass+'">'+st.label+' ('+st.healthy+'/'+meta.rf+')</span></td>' +
+      '<td><span class="repl-dots">'+dots+'</span></td>' +
+      '<td><button class="ghost small" data-act="view" data-key="'+key+'">View</button> <button class="ghost small" data-act="del" data-key="'+key+'">Delete</button></td>' +
+      '</tr>';
+  }).join('');
+
+  tbody.querySelectorAll('button[data-act="view"]').forEach(function(b){
+    b.onclick = function(){ S.focusedKey = b.getAttribute('data-key'); renderAll(); };
+  });
+  tbody.querySelectorAll('button[data-act="del"]').forEach(function(b){
+    b.onclick = function(){ deleteObject(b.getAttribute('data-key')); renderAll(); };
+  });
+}
+
+function renderLog(){
+  var el = document.getElementById('log');
+  el.innerHTML = S.log.map(function(l){
+    return '<div class="log-line '+l.level+'"><span class="t mono">'+l.t+'</span><span>'+l.msg+'</span></div>';
+  }).join('');
+}
+
+function renderAll(){
+  renderCfgBar();
+  renderChaosBar();
+  renderMetrics();
+  renderTopology();
+  renderInspector();
+  renderObjTable();
+  renderLog();
+}
+
+// ---------- form wiring ----------
+
+function wireForms(){
+  document.getElementById('btnRandomKey').onclick = function(){
+    var n = 'obj-' + Math.random().toString(36).slice(2,7);
+    document.getElementById('putKey').value = n;
+  };
+  document.getElementById('btnWrite').onclick = function(){
+    var key = document.getElementById('putKey').value.trim();
+    var data = document.getElementById('putData').value;
+    var rf = parseInt(document.getElementById('putRf').value) || undefined;
+    var box = document.getElementById('writeResult');
+    if (!key){ box.innerHTML = '<div class="result-box err">Enter a key first.</div>'; return; }
+    if (!data){ box.innerHTML = '<div class="result-box err">Enter some data to write.</div>'; return; }
+    var res = putObject(key, data, rf);
+    box.innerHTML = res.ok
+      ? '<div class="result-box ok mono">Wrote v'+res.version+' to ['+res.placement.join(', ')+']</div>'
+      : '<div class="result-box err">'+res.msg+'</div>';
+    renderAll();
+  };
+  document.getElementById('btnRead').onclick = function(){
+    var key = document.getElementById('getKey').value.trim();
+    var r = parseInt(document.getElementById('getR').value) || undefined;
+    var box = document.getElementById('readResult');
+    if (!key){ box.innerHTML = '<div class="result-box err">Enter a key first.</div>'; return; }
+    var res = readObject(key, r);
+    box.innerHTML = res.ok
+      ? '<div class="result-box ok"><div class="mono" style="margin-bottom:6px; white-space:pre-wrap;">'+escapeHtml(res.data)+'</div><span style="color:var(--text-dim);">v'+res.version+' · served by '+res.servedBy.join(', ')+' · '+res.healthyCount+'/'+res.sampleSize+' healthy</span></div>'
+      : '<div class="result-box err">'+res.msg+'</div>';
+    renderAll();
+  };
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+initState();
+wireForms();
+renderAll();
+
+})();
+</script>
+</body>
+</html>
